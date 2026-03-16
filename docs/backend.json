@@ -1,0 +1,264 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a registered user of the PeerJudge application, typically an administrator who creates and manages rooms.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The display name of the user."
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "Room": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Room",
+      "type": "object",
+      "description": "Represents a single peer judging session or classroom room created by an administrator.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "An optional title or name for the room, set by the admin."
+        },
+        "adminId": {
+          "type": "string",
+          "description": "Reference to the User who created and administrates this room."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The timestamp when the room was created.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the room.",
+          "enum": [
+            "live",
+            "ended"
+          ]
+        },
+        "isLocked": {
+          "type": "boolean",
+          "description": "Whether the room is locked and prevents new participants from joining."
+        },
+        "activePerformerIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of IDs of performance documents for the currently active performers."
+        },
+        "deletedAt": {
+          "type": "string",
+          "description": "The timestamp when the room was soft-deleted or moved to the recycle bin.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "adminId",
+        "createdAt",
+        "status",
+        "isLocked"
+      ]
+    },
+    "RoomParticipant": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "RoomParticipant",
+      "type": "object",
+      "description": "Tracks a participant within a specific judging room session. This is a persistent record of their joining.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name entered by the participant for this specific session."
+        },
+        "registerNumber": {
+          "type": "string",
+          "description": "A unique identifier for the participant (e.g., student ID), used to prevent duplicate active sessions."
+        },
+        "role": {
+          "type": "string",
+          "description": "The role of the participant in this room, e.g., 'judge' or 'admin'."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current online status of the participant.",
+          "enum": [
+            "online",
+            "offline"
+          ]
+        },
+        "joinedAt": {
+          "type": "string",
+          "description": "The timestamp when the participant joined the room.",
+          "format": "date-time"
+        },
+        "nameSource": {
+          "type": "string",
+          "description": "Indicates whether the name was verified from the roster or entered manually.",
+          "enum": ["verified", "manual"]
+        }
+      },
+      "required": [
+        "name",
+        "registerNumber",
+        "role",
+        "status",
+        "joinedAt",
+        "nameSource"
+      ]
+    },
+    "Performance": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Performance",
+      "type": "object",
+      "description": "Represents a single performance within a room, including scores and status.",
+      "properties": {
+        "performerName": {
+          "type": "string",
+          "description": "The name of the person performing."
+        },
+        "voters": {
+          "type": "object",
+          "description": "A map of judge UIDs to their given scores."
+        },
+        "totalScore": {
+          "type": "number",
+          "description": "The sum of all scores given."
+        },
+        "voteCount": {
+          "type": "number",
+          "description": "The number of judges who have voted."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the performance.",
+          "enum": [
+            "waiting",
+            "performing",
+            "finished"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the performance was created."
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the performance started."
+        }
+      },
+      "required": [
+        "performerName",
+        "totalScore",
+        "voteCount",
+        "status",
+        "createdAt"
+      ]
+    },
+    "IssueReport": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "IssueReport",
+      "type": "object",
+      "description": "Represents a technical issue reported by a judge during a session.",
+      "properties": {
+        "judgeName": {
+          "type": "string",
+          "description": "The name of the judge reporting the issue."
+        },
+        "judgeId": {
+          "type": "string",
+          "description": "The auth UID of the reporting judge."
+        },
+        "issue": {
+          "type": "string",
+          "description": "The category of the issue."
+        },
+        "customMessage": {
+          "type": "string",
+          "description": "An optional detailed description if 'OTHER' is selected."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the report was submitted."
+        }
+      },
+      "required": ["judgeName", "judgeId", "issue", "createdAt"]
+    }
+  },
+  "auth": {
+    "providers": [
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores individual user profiles, primarily for administrators."
+        }
+      },
+      {
+        "path": "/rooms/{roomId}",
+        "definition": {
+          "entityName": "Room",
+          "schema": {
+            "$ref": "#/backend/entities/Room"
+          },
+          "description": "Stores individual judging room configurations. The document ID (`roomId`) is the public-facing, human-readable room code. This top-level collection allows for efficient lookup by code."
+        }
+      },
+      {
+        "path": "/rooms/{roomId}/participants/{participantId}",
+        "definition": {
+          "entityName": "RoomParticipant",
+          "schema": {
+            "$ref": "#/backend/entities/RoomParticipant"
+          },
+          "description": "Stores the record of each participant who joins a room.",
+          "params": [
+            {
+              "name": "roomId",
+              "description": "The unique identifier of the room."
+            },
+            {
+              "name": "participantId",
+              "description": "The unique user ID of the participant."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/rooms/{roomId}/performances/{performanceId}",
+        "definition": {
+          "entityName": "Performance",
+          "schema": {
+            "$ref": "#/backend/entities/Performance"
+          },
+          "description": "Stores individual performance records for a given room, including votes and scores."
+        }
+      },
+      {
+        "path": "/rooms/{roomId}/reports/{reportId}",
+        "definition": {
+          "entityName": "IssueReport",
+          "schema": {
+            "$ref": "#/backend/entities/IssueReport"
+          },
+          "description": "Stores technical issue reports submitted by judges."
+        }
+      }
+    ],
+    "reasoning": "Extended to support multiple active performers per room."
+  }
+}

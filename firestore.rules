@@ -1,0 +1,86 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --------------------------------------------------------------------------
+    // Helper Functions
+    // --------------------------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Checks if the user is the original creator OR a designated host participant
+    function isRoomAdmin(roomId) {
+      // Check for original creator
+      let isCreator = exists(/databases/$(database)/documents/rooms/$(roomId)) && 
+                      request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.adminId;
+      
+      // Check for designated host participant record
+      let participantPath = /databases/$(database)/documents/rooms/$(roomId)/participants/$(request.auth.uid);
+      let isHostParticipant = exists(participantPath) && get(participantPath).data.role == 'host';
+      
+      return isSignedIn() && (isCreator || isHostParticipant);
+    }
+    
+    function isParticipant(roomId) {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/rooms/$(roomId)/participants/$(request.auth.uid));
+    }
+
+    // --------------------------------------------------------------------------
+    // Collection Rules
+    // --------------------------------------------------------------------------
+
+    match /users/{userId} {
+      allow get, write: if isOwner(userId);
+      allow list: if false;
+    }
+
+    match /rooms/{roomId} {
+      // Anyone signed in can read the room metadata (for joining)
+      allow read: if isSignedIn();
+      
+      // Anyone signed in can create rooms
+      allow create: if isSignedIn();
+      
+      // Only admins (creator or host) can update room config or delete the room
+      allow update, delete: if isRoomAdmin(roomId);
+      
+      // --- Subcollections ---
+
+      match /participants/{participantId} {
+        // Users can join as themselves
+        allow create: if isSignedIn() && request.auth.uid == participantId;
+        // Anyone in the room or public viewers can see the list of participants (for status/verified indicators)
+        allow list: if isSignedIn();
+        // Admins or the user themselves can see detailed participant data
+        allow get: if isRoomAdmin(roomId) || isOwner(participantId);
+        // Only the user or the admin can update status/name
+        allow update: if isOwner(participantId) || isRoomAdmin(roomId);
+        // Only the admin can remove (kick) a participant, or users can remove themselves (leave)
+        allow delete: if isRoomAdmin(roomId) || isOwner(participantId);
+      }
+
+      match /performances/{performanceId} {
+        // Anyone in the room can see performances
+        allow read: if isSignedIn();
+        // Only the admin can create or delete performance records
+        allow create, delete: if isRoomAdmin(roomId);
+        // Participants can update scores (judging) or admin can update status
+        allow update: if isParticipant(roomId) || isRoomAdmin(roomId);
+      }
+
+      match /reports/{reportId} {
+        // Any signed-in user can report an issue or see the list of reported issues
+        allow read, create: if isSignedIn();
+        // Only the room admin can delete (clear) reports.
+        allow delete: if isRoomAdmin(roomId);
+      }
+    }
+  }
+}
